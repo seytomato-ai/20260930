@@ -67,7 +67,7 @@
   /**
    * 분홍 칸 안의 글자 모양으로 '미마감'인지 가린다.
    *  - '미마감': 가로로 긴 세 글자 → 글자 영역이 높이보다 훨씬 넓다
-   *  - 결석 '/': 좁은 사선 하나 → 글자 영역이 좁다
+   *  - 결석 'Ø'(또는 '/'): 기호 하나 → 글자 영역이 좁다
    *  - 빈 칸: 글자 없음
    */
   function classifyBox(imageData, b) {
@@ -338,7 +338,7 @@
     }
     if (excluded.length) {
       const slash = excluded.filter(b => b.cls.kind === 'slash').length;
-      warnings.push(`'미마감' 글자가 없는 분홍 칸 ${excluded.length}개${slash ? `(결석 "/" ${slash}개 포함)` : ''}는 제외했습니다.`);
+      warnings.push(`'미마감' 글자가 없는 분홍 칸 ${excluded.length}개${slash ? `(결석 Ø ${slash}개 포함)` : ''}는 제외했습니다.`);
     }
     if (unmatched.length) warnings.push(`위치를 판단하지 못한 미마감 칸 ${unmatched.length}개가 있습니다. 아래 표에서 직접 확인해 주세요.`);
 
