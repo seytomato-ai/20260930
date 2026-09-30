@@ -19,7 +19,7 @@
 - 저장소에는 실제 학생 정보를 넣지 마세요. `assets/`, `tests/fixtures/`의 이름은 모두 가상입니다.
 
 ## 배포 (GitHub Pages)
-저장소 **Settings → Pages → Source: GitHub Actions**로 설정하면 `main`에 푸시할 때 `.github/workflows/pages.yml`이 배포합니다.
+`main`에 푸시하면 `.github/workflows/pages.yml`이 공개 파일만 `gh-pages` 브랜치로 올립니다. (Settings → Pages → Source: Deploy from a branch, `gh-pages` / root)
 정적 파일이라 학교 내부 웹서버나 내 컴퓨터(`python3 -m http.server`)에서도 그대로 동작합니다.
 
 ## 개발
