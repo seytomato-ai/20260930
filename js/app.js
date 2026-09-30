@@ -417,8 +417,26 @@
         }
       }
     }
-    if ($('#optMerge').checked) return mergeRows(rows);
-    return rows;
+    const out = $('#optMerge').checked ? mergeRows(rows) : rows;
+    return $('#optLimit').checked ? limitRows(out, Math.max(1, parseInt($('#optLimitN').value, 10) || 3)) : out;
+  }
+
+  // 같은 날짜·과목·교시·담당 교사의 학생이 많으면 번호순으로 앞의 n명만 남긴다.
+  // 남긴 행에는 원래 전체 학생 수(groupTotal)를 적어 두어 요약·요청 문구에 '외 N명'으로 쓴다.
+  function limitRows(rows, n) {
+    const groups = new Map();
+    for (const r of rows) {
+      if (!r.subject) continue; // 과목을 모르면 묶지 않는다
+      const k = [r.date, r.subject, r.periodText, r.teacher].join('|');
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(r);
+    }
+    const drop = new Set();
+    for (const g of groups.values()) {
+      if (g.length <= n) continue;
+      g.forEach((r, i) => { r.groupTotal = g.length; if (i >= n) drop.add(r); });
+    }
+    return rows.filter(r => !drop.has(r));
   }
 
   function mergeRows(rows) {
@@ -457,6 +475,19 @@
     }
     lastRows = buildRows(byDate);
     renderResult(lastRows);
+    const seen = new Set();
+    let hidden = 0, groups = 0;
+    for (const r of lastRows) {
+      if (!r.groupTotal) continue;
+      const k = [r.date, r.subject, r.periodText, r.teacher].join('|');
+      if (seen.has(k)) continue;
+      seen.add(k);
+      groups++;
+      hidden += r.groupTotal - lastRows.filter(x => x.groupTotal && [x.date, x.subject, x.periodText, x.teacher].join('|') === k).length;
+    }
+    const note = $('#limitNote');
+    note.hidden = !hidden;
+    note.textContent = hidden ? `같은 수업 학생이 많은 ${groups}건은 번호 순으로 앞의 학생만 적고 ${hidden}명은 생략했습니다. (교사별 요약·요청 문구에는 '외 N명'으로 표시)` : '';
   }
 
   function fileName() {
@@ -507,7 +538,7 @@
     for (const [teacher, list] of byTeacher) {
       const lines = list.map(g => {
         const d = new Date(g.dateText.replace(/\./g, '-') + 'T00:00:00');
-        return `- ${d.getMonth() + 1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]}) ${g.periodText} ${g.subject}: ${g.names.join(', ')}`;
+        return `- ${d.getMonth() + 1}/${d.getDate()}(${'일월화수목금토'[d.getDay()]}) ${g.periodText} ${g.subject}: ${g.names.join(', ')}${g.more ? ` 외 ${g.more}명` : ''}`;
       });
       parts.push(`${teacher} 선생님, ${cc ? cc + ' ' : ''}학생 교시 출결 마감 부탁드립니다.\n${lines.join('\n')}`);
     }
@@ -546,8 +577,9 @@
   $('#appendFile').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) exportAppend(f); });
   $('#btnCopy').addEventListener('click', copyMessages);
   $('#btnClear').addEventListener('click', clearAll);
-  for (const id of ['#classCode', '#optMsg', '#optStatus', '#optMerge']) $(id).addEventListener('input', render);
+  for (const id of ['#classCode', '#optMsg', '#optStatus', '#optMerge', '#optLimitN']) $(id).addEventListener('input', render);
   $('#optMerge').addEventListener('change', render);
+  $('#optLimit').addEventListener('change', render);
 
   document.addEventListener('paste', e => {
     const files = [...(e.clipboardData ? e.clipboardData.items : [])]

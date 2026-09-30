@@ -41,7 +41,10 @@
     for (const r of rows) {
       const key = [r.teacher || '(교사 미확인)', r.dateText, r.periodText, r.subject].join('\u0001');
       if (!map.has(key)) map.set(key, { teacher: r.teacher || '(교사 미확인)', dateText: r.dateText, periodText: r.periodText, subject: r.subject, names: [] });
-      map.get(key).names.push(r.name);
+      const g = map.get(key);
+      g.names.push(r.name);
+      g.total = Math.max(g.total || 0, r.groupTotal || 0, g.names.length);
+      g.more = g.total - g.names.length;
     }
     return [...map.values()].sort((a, b) =>
       a.teacher.localeCompare(b.teacher, 'ko') || a.dateText.localeCompare(b.dateText) || a.periodText.localeCompare(b.periodText, 'ko', { numeric: true }));
@@ -67,7 +70,7 @@
       { header: '과목', width: 22 }, { header: '학생 수', width: 8 }, { header: '학생', width: 60 },
     ];
     styleHeader(ws.getRow(1));
-    for (const s of teacherSummary(rows)) ws.addRow([s.teacher, s.dateText, s.periodText, s.subject, s.names.length, s.names.join(', ')]);
+    for (const s of teacherSummary(rows)) ws.addRow([s.teacher, s.dateText, s.periodText, s.subject, s.total, s.names.join(', ') + (s.more ? ` 외 ${s.more}명` : '')]);
     ws.views = [{ state: 'frozen', ySplit: 1 }];
     ws.autoFilter = { from: 'A1', to: 'F1' };
   }

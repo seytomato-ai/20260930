@@ -46,6 +46,16 @@ const mock = await (async () => {
   await p2.close();
   return m;
 })();
+// 기본값: 같은 날짜·과목·교시·교사는 3명까지만
+{
+  const limited = await page.evaluate(() => window.__app.getRows());
+  const eng1 = limited.filter(r => r.periodText === '1교시' && r.subject === '영어Ⅱ');
+  ok(eng1.length === 3 && eng1.every(r => r.groupTotal === 5), `같은 수업(수 1교시 영어Ⅱ, 5명)은 3명만 표시 (${eng1.map(r => r.no).join(',')})`);
+  ok(/2명은 생략/.test(await page.textContent('#limitNote')), '생략 안내 문구');
+  await page.fill('#optLimitN', '2');
+  ok((await page.evaluate(() => window.__app.getRows())).filter(r => r.periodText === '1교시' && r.subject === '영어Ⅱ').length === 2, '표시 인원 수 바꾸기 (2명)');
+  await page.uncheck('#optLimit');
+}
 const expected = [];
 for (const [no, ps] of Object.entries(mock.UNCLOSED)) for (const p of ps) expected.push(`${no}:${p}교시`);
 const rows = await page.evaluate(() => window.__app.getRows());
@@ -118,6 +128,7 @@ ok(errors.length === 0, '콘솔 오류 없음' + (errors.length ? ': ' + errors.
   ok(await p2.inputValue('#classCode') === '2-3', 'PDF에서 학년-반 채우기');
   await p2.setInputFiles('#imgFile', [fx('mock-part1.png'), fx('mock-part2.png')]);
   await p2.waitForFunction(() => window.__app.state.shots.length === 2 && window.__app.state.shots.every(s => s.status === 'done' || s.status === 'error'), null, { timeout: 120000 });
+  await p2.uncheck('#optLimit');
   const pdfRows = await p2.evaluate(() => window.__app.getRows());
   const key = r => `${r.no}|${r.name}|${r.periodText}|${r.subject}|${r.teacher}`;
   ok(JSON.stringify(pdfRows.map(key)) === JSON.stringify(rows.map(key)), `PDF 시간표로도 같은 결과 (${pdfRows.length}행)`);
