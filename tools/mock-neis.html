@@ -1,0 +1,65 @@
+<!doctype html>
+<!--
+  예시 캡처 이미지와 자동 테스트용 '가짜' 나이스 출결 화면입니다.
+  이름·자료는 모두 지어낸 것입니다.  사용법: mock-neis.html?from=1&to=14
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>mock</title>
+<style>
+  body { margin: 0; font-family: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: #fff; color: #222; width: 1250px; }
+  .top { display: flex; align-items: center; padding: 18px 12px 8px; gap: 10px; }
+  .top h1 { font-size: 18px; margin: 0; font-weight: 700; color: #1b2a4a; }
+  .top .total { font-size: 14px; }
+  .top .btns { margin-left: auto; display: flex; gap: 8px; }
+  .top .btns span { background: #3a78f2; color: #fff; font-size: 13px; padding: 7px 10px; border-radius: 3px; }
+  .filter { margin: 4px 12px 12px; background: #f3f5f8; padding: 12px; display: flex; align-items: center; gap: 16px; font-size: 13px; border-radius: 4px; }
+  .filter .sel { border: 1px solid #aaa; background: #fff; width: 110px; padding: 5px 8px; border-radius: 3px; }
+  .filter .inp { border: 1px solid #ccc; background: #fff; width: 440px; height: 26px; border-radius: 3px; }
+  .filter .warn { color: #c21d4b; }
+  table { border-collapse: collapse; margin: 0 12px; font-size: 13px; table-layout: fixed; }
+  th { background: #eef0f4; font-weight: 500; height: 30px; border: 1px solid #dde1e6; }
+  td { border-bottom: 1px solid #e3e6ea; border-right: 1px solid #eef0f2; height: 35px; }
+  td.no { text-align: center; }
+  td.name { padding-left: 8px; }
+  .box { margin: 0 4px; height: 25px; border: 1px solid #d6d8da; border-radius: 4px; box-sizing: border-box; text-align: center; line-height: 23px; color: transparent; }
+  .box.un { border-color: pink; color: #dfe0e2; }
+</style>
+</head>
+<body>
+<div class="top"><h1 id="title"></h1><span class="total">Total 28</span><span>⚙</span>
+  <div class="btns"><span>동아리활동</span><span>현장실습/인정결</span></div></div>
+<div class="filter"><span>☐ 깨끗이</span><span class="sel">출석 ⌄</span><span>사유</span><span class="inp"></span><span class="warn">☞ 일출결마감미확인</span></div>
+<table>
+  <colgroup><col style="width:75px"><col style="width:218px"><col style="width:152px"><col style="width:91px">
+    <col style="width:91px"><col style="width:91px"><col style="width:91px"><col style="width:91px"><col style="width:91px"><col style="width:91px"><col style="width:91px"><col style="width:91px"></colgroup>
+  <thead><tr><th>번호</th><th>성명</th><th>마감</th><th>조회</th><th>1교시</th><th>2교시</th><th>3교시</th><th>4교시</th><th>5교시</th><th>6교시</th><th>7교시</th><th>종례</th></tr></thead>
+  <tbody id="tb"></tbody>
+</table>
+<script>
+  const NAMES = ['강가온','고나래','권다솜','김라온','김마루','남보라','노새봄','류아름','문여울','박은솔',
+    '배하람','서나린','손다온','송미르','신바다','안소리','양하늘','오누리','유가람','윤별하',
+    '이도담','이로운','임새론','장한결','전해솔','정다인','조은별','최푸름'];
+  // [번호, 미마감 교시...]
+  const UNCLOSED = { 2: [3], 3: [1, 5], 5: [5], 7: [3, 7], 8: [1], 11: [5, 6], 12: [5], 14: [2],
+    16: [7], 17: [1, 6], 19: [4], 21: [1, 5], 23: [6, 7], 24: [2], 26: [5], 28: [1] };
+  const q = new URLSearchParams(location.search);
+  const from = +(q.get('from') || 1), to = +(q.get('to') || 28);
+  document.getElementById('title').textContent = q.get('title') || '2학년 3반 2026.09.23.(수)';
+  const tb = document.getElementById('tb');
+  for (let n = from; n <= to; n++) {
+    const tr = document.createElement('tr');
+    let h = `<td class="no">${n}</td><td class="name">${NAMES[n - 1]}</td><td><div class="box"></div></td><td><div class="box"></div></td>`;
+    for (let p = 1; p <= 7; p++) {
+      const un = (UNCLOSED[n] || []).includes(p);
+      h += `<td><div class="box${un ? ' un' : ''}">${un ? '미마감' : ''}</div></td>`;
+    }
+    h += '<td><div class="box"></div></td>';
+    tr.innerHTML = h;
+    tb.appendChild(tr);
+  }
+  window.MOCK = { NAMES, UNCLOSED };
+</script>
+</body>
+</html>

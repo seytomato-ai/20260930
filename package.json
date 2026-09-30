@@ -1,0 +1,13 @@
+{
+  "name": "unclosed-attendance-helper",
+  "private": true,
+  "type": "module",
+  "description": "나이스 미마감 정리 도우미 — 정적 웹앱 (서버 없음)",
+  "scripts": {
+    "test": "node tests/e2e.mjs"
+  },
+  "devDependencies": {
+    "exceljs": "4.4.0",
+    "playwright-core": "^1.55.0"
+  }
+}
