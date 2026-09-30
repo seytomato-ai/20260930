@@ -64,6 +64,47 @@
     return { boxes: full, partial };
   }
 
+  /**
+   * 분홍 칸 안의 글자 모양으로 '미마감'인지 가린다.
+   *  - '미마감': 가로로 긴 세 글자 → 글자 영역이 높이보다 훨씬 넓다
+   *  - 결석 '/': 좁은 사선 하나 → 글자 영역이 좁다
+   *  - 빈 칸: 글자 없음
+   */
+  function classifyBox(imageData, b) {
+    const { width: w, data } = imageData;
+    const inset = Math.max(3, Math.round(b.h * 0.15));
+    let x0 = Infinity, x1 = -1, y0 = Infinity, y1 = -1, n = 0;
+    for (let y = b.y0 + inset; y <= b.y1 - inset; y++) {
+      for (let x = b.x0 + inset; x <= b.x1 - inset; x++) {
+        const p = (y * w + x) * 4;
+        const r = data[p], g = data[p + 1], bl = data[p + 2];
+        if (isPink(r, g, bl)) continue;
+        const lum = 0.299 * r + 0.587 * g + 0.114 * bl;
+        if (lum > 238) continue;
+        n++;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+    if (n < 4) return { kind: 'blank' };
+    const iw = x1 - x0 + 1, ih = y1 - y0 + 1;
+    // 세로로 잘라 글자 덩어리 수를 센다 (미마감 = 3덩어리)
+    let blobs = 0, inBlob = false, gap = 0;
+    for (let x = x0; x <= x1; x++) {
+      let has = false;
+      for (let y = y0; y <= y1 && !has; y++) {
+        const p = (y * w + x) * 4;
+        const lum = 0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2];
+        if (lum <= 238 && !isPink(data[p], data[p + 1], data[p + 2])) has = true;
+      }
+      if (has) { if (!inBlob && (gap >= 1 || blobs === 0)) blobs++; inBlob = true; gap = 0; }
+      else { inBlob = false; gap++; }
+    }
+    if (iw >= ih * 1.8 && blobs >= 2) return { kind: 'unclosed', iw, ih, blobs };
+    if (iw <= ih * 1.2 && blobs <= 1) return { kind: 'slash', iw, ih, blobs };
+    return { kind: 'other', iw, ih, blobs };
+  }
+
   function median(arr) {
     if (!arr.length) return 0;
     const s = [...arr].sort((a, b) => a - b);
@@ -275,8 +316,12 @@
 
     const cells = [];
     const unmatched = [];
+    const excluded = [];
+    const imgData = bctx.getImageData(0, 0, W, H);
     for (const b of boxes) {
       if (b.cy < headerBottom) continue;
+      b.cls = classifyBox(imgData, b);
+      if (b.cls.kind !== 'unclosed') { excluded.push(b); continue; }
       let col = null, best = Infinity;
       for (const c of cols) {
         const d = Math.abs(c.x - b.cx);
@@ -291,6 +336,10 @@
       if (!col || !no) { unmatched.push(b); continue; }
       cells.push({ no, col: col.key, period: col.period, box: b });
     }
+    if (excluded.length) {
+      const slash = excluded.filter(b => b.cls.kind === 'slash').length;
+      warnings.push(`'미마감' 글자가 없는 분홍 칸 ${excluded.length}개${slash ? `(결석 "/" ${slash}개 포함)` : ''}는 제외했습니다.`);
+    }
     if (unmatched.length) warnings.push(`위치를 판단하지 못한 미마감 칸 ${unmatched.length}개가 있습니다. 아래 표에서 직접 확인해 주세요.`);
 
     const visibleNos = [];
@@ -304,9 +353,9 @@
 
     return {
       meta, cells, cols, rows, fit, names, warnings, visibleNos,
-      boxes, partial, unmatched, width: W, height: H,
+      boxes, partial, unmatched, excluded, width: W, height: H,
     };
   }
 
-  window.NeisDetect = { analyze, findPinkBoxes, parseMeta, _internal: { findHeaders, buildColumns, buildRows } };
+  window.NeisDetect = { analyze, findPinkBoxes, classifyBox, parseMeta, _internal: { findHeaders, buildColumns, buildRows } };
 })();

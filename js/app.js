@@ -241,6 +241,14 @@
       ctx.textBaseline = 'middle';
       ctx.fillText(label, b.x0 + 4, b.y0 + b.h / 2);
     }
+    ctx.strokeStyle = '#7a8699';
+    ctx.lineWidth = Math.max(1.5, img.naturalWidth / 700);
+    for (const b of r.excluded || []) {
+      ctx.beginPath();
+      ctx.moveTo(b.x0, b.y0); ctx.lineTo(b.x1, b.y1);
+      ctx.moveTo(b.x1, b.y0); ctx.lineTo(b.x0, b.y1);
+      ctx.stroke();
+    }
     ctx.setLineDash([6, 4]);
     ctx.strokeStyle = '#b25b00';
     for (const b of [...r.unmatched, ...r.partial]) ctx.strokeRect(b.x0 - 2, b.y0 - 2, b.w + 4, b.h + 4);

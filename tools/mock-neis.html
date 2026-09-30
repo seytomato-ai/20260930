@@ -25,6 +25,7 @@
   td.name { padding-left: 8px; }
   .box { margin: 0 4px; height: 25px; border: 1px solid #d6d8da; border-radius: 4px; box-sizing: border-box; text-align: center; line-height: 23px; color: transparent; }
   .box.un { border-color: pink; color: #dfe0e2; }
+  .box.ab { color: #333; }
 </style>
 </head>
 <body>
@@ -44,6 +45,8 @@
   // [번호, 미마감 교시...]
   const UNCLOSED = { 2: [3], 3: [1, 5], 5: [5], 7: [3, 7], 8: [1], 11: [5, 6], 12: [5], 14: [2],
     16: [7], 17: [1, 6], 19: [4], 21: [1, 5], 23: [6, 7], 24: [2], 26: [5], 28: [1] };
+  // 결석: 분홍 테두리지만 '/' 표시 (미마감 아님)
+  const ABSENT = { 9: [1, 2, 3, 4, 5, 6, 7], 13: [2] };
   const q = new URLSearchParams(location.search);
   const from = +(q.get('from') || 1), to = +(q.get('to') || 28);
   document.getElementById('title').textContent = q.get('title') || '2학년 3반 2026.09.23.(수)';
@@ -53,13 +56,14 @@
     let h = `<td class="no">${n}</td><td class="name">${NAMES[n - 1]}</td><td><div class="box"></div></td><td><div class="box"></div></td>`;
     for (let p = 1; p <= 7; p++) {
       const un = (UNCLOSED[n] || []).includes(p);
-      h += `<td><div class="box${un ? ' un' : ''}">${un ? '미마감' : ''}</div></td>`;
+      const ab = (ABSENT[n] || []).includes(p);
+      h += `<td><div class="box${un || ab ? ' un' : ''}${ab ? ' ab' : ''}">${un ? '미마감' : ab ? '/' : ''}</div></td>`;
     }
     h += '<td><div class="box"></div></td>';
     tr.innerHTML = h;
     tb.appendChild(tr);
   }
-  window.MOCK = { NAMES, UNCLOSED };
+  window.MOCK = { NAMES, UNCLOSED, ABSENT };
 </script>
 </body>
 </html>
