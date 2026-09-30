@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- 개인정보 보호: 이 페이지는 자기 자신(같은 사이트)의 파일 외에는 어떤 곳과도 통신할 수 없습니다. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' blob: data:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>미마감 정리 도우미</title>
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <h1>미마감 정리 도우미</h1>
+    <p class="sub">나이스 출결 화면을 캡처해서 넣으면, 학생 시간표에서 과목·담당 교사를 찾아 <b>미마감 요청 엑셀</b>로 정리해 드립니다.</p>
+    <p class="privacy-badge" id="privacyBadge">🔒 모든 파일은 <b>이 컴퓨터의 브라우저 안에서만</b> 처리됩니다 · 서버 전송 없음 · 저장 없음 · 창을 닫으면 사라짐</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- 1. 시간표 -->
+  <section class="card" id="step1">
+    <h2><span class="num">1</span> 학생 시간표 불러오기</h2>
+    <p class="hint">나이스 <b>학생별 시간표 PDF</b> 또는 시간표 엑셀(xlsx·xls·csv)을 넣어 주세요. 여러 파일(여러 주차)을 한꺼번에 넣어도 됩니다. 형식이 없다면 <button type="button" class="link" id="btnTemplate">시간표 양식 내려받기</button>로 만들 수 있습니다.</p>
+    <label class="drop" id="ttDrop">
+      <input type="file" id="ttFile" accept=".xlsx,.xls,.csv,.pdf" multiple hidden>
+      <span class="drop-main">시간표 파일을 끌어다 놓거나 <u>클릭해서 선택</u></span>
+      <span class="drop-sub">나이스 학생별 시간표 PDF · 엑셀 가로형(번호·이름·월1…금7) · 세로형(번호·이름·요일·교시·과목·교사)</span>
+    </label>
+    <div id="ttInfo" class="info" hidden></div>
+    <details class="fold">
+      <summary>시간표 형식 자세히 보기</summary>
+      <div class="fold-body">
+        <p><b>나이스 학생별 시간표 PDF (가장 간편)</b> — 나이스에서 반 학생 전체의 ‘학생별 시간표’를 PDF로 저장해 그대로 넣으면 됩니다. 한 쪽에 학생 한 명, 주차 날짜가 있으면 그 주는 날짜 그대로 찾습니다. (스캔한 이미지 PDF는 읽을 수 없습니다)</p>
+        <p><b>엑셀 가로형</b> — 한 학생이 한 줄, 칸에는 <code>과목(교사)</code></p>
+        <div class="table-scroll"><table class="mini">
+          <tr><th>번호</th><th>이름</th><th>월1</th><th>월2</th><th>…</th><th>수1</th><th>…</th><th>금7</th></tr>
+          <tr><td>1</td><td>강가온</td><td>영어Ⅱ(한서준)</td><td>기하(문지후)</td><td>…</td><td>영어Ⅱ(한서준)</td><td>…</td><td>세계사(오하린)</td></tr>
+          <tr><td></td><td>공통</td><td>영어Ⅱ(한서준)</td><td></td><td>…</td><td></td><td>…</td><td></td></tr>
+        </table></div>
+        <ul>
+          <li>칸은 <code>과목(교사)</code>, <code>과목/교사</code>, <code>과목</code>↵<code>교사</code> 모두 인식합니다.</li>
+          <li>이름을 <b>공통</b>으로 쓴 줄은 반 전체의 기본 시간표로 쓰입니다(학생 칸이 비어 있을 때).</li>
+          <li>칸에 과목만 있다면 <b>과목-교사</b> 시트(과목 | 교사)를 추가하면 교사를 채워 줍니다.</li>
+          <li>세로형: <code>번호 | 이름 | 요일 | 교시 | 과목 | 교사</code> 한 줄에 한 시간씩.</li>
+        </ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- 2. 캡처 -->
+  <section class="card" id="step2">
+    <h2><span class="num">2</span> 나이스 미마감 화면 넣기</h2>
+    <div class="capture-grid">
+      <div>
+        <div class="drop big" id="imgDrop" tabindex="0">
+          <input type="file" id="imgFile" accept="image/*" multiple hidden>
+          <span class="drop-main">캡처 이미지를 <b>Ctrl+V</b>로 붙여넣기</span>
+          <span class="drop-sub">또는 끌어다 놓기 · <u>클릭해서 선택</u> · 여러 장 가능</span>
+        </div>
+        <div class="row gap">
+          <label class="field">학년-반 <input id="classCode" placeholder="예: 2-7" size="6"></label>
+          <span class="hint small">캡처 제목(예: 2학년 7반)에서 자동으로 채워집니다.</span>
+        </div>
+        <div id="ocrStatus" class="status" hidden></div>
+      </div>
+      <figure class="example">
+        <img src="assets/example-capture.png" alt="나이스 출결 화면 캡처 예시" width="1250" loading="lazy">
+        <figcaption>
+          <b>캡처 예시</b> (가상의 학생 자료)
+          <ol>
+            <li>나이스 학급 <b>일일 출결</b> 화면에서 날짜를 고릅니다.</li>
+            <li><b>제목 줄</b>(2학년 3반 2026.09.23.)과 <b>머리글 줄</b>(번호·성명·1교시…)이 함께 보이게 캡처합니다.</li>
+            <li>학생이 많아 한 화면에 안 보이면 스크롤하며 <b>여러 장</b> 캡처해도 됩니다.</li>
+            <li>분홍 칸 중 <b>‘미마감’ 글자가 있는 칸만</b> 정리합니다. 결석(<b>Ø</b>) 표시 칸은 자동으로 빠집니다.</li>
+            <li>캡처: 윈도우 <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> · 맥 <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>4</kbd> → 여기서 <kbd>Ctrl</kbd>+<kbd>V</kbd></li>
+          </ol>
+        </figcaption>
+      </figure>
+    </div>
+    <div id="shots" class="shots"></div>
+  </section>
+
+  <!-- 3. 확인 -->
+  <section class="card" id="step3" hidden>
+    <h2><span class="num">3</span> 인식 결과 확인·수정</h2>
+    <p class="hint">분홍색 칸이 <b>미마감</b>으로 인식된 곳입니다. 칸을 눌러 켜고 끌 수 있어요. 칸 안의 글자는 시간표에서 찾은 과목입니다.</p>
+    <div id="grids"></div>
+  </section>
+
+  <!-- 4. 결과 -->
+  <section class="card" id="step4" hidden>
+    <h2><span class="num">4</span> 엑셀로 내려받기</h2>
+    <div class="options">
+      <label class="field">전달 사항 <input id="optMsg" value="교시 마감 부탁드립니다." size="24"></label>
+      <label class="field">상태 <select id="optStatus"><option>요청중</option><option>완료</option></select></label>
+      <label class="field">시트 이름 <input id="optSheet" value="미마감 정리" size="12"></label>
+      <label class="check"><input type="checkbox" id="optLimit" checked> 같은 날짜·과목·교시·교사는 학생 <input type="number" id="optLimitN" value="3" min="1" max="50" style="width:3.5em"> 명까지만 적기</label>
+      <label class="check"><input type="checkbox" id="optMerge"> 같은 과목 여러 교시는 한 줄로 (예: 5교시, 6교시)</label>
+      <label class="check"><input type="checkbox" id="optSummary" checked> ‘교사별 요약’ 시트 추가</label>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btnNew">새 엑셀 파일 만들기</button>
+      <label class="btn" id="btnAppendLabel">기존 기록 파일에 이어쓰기…<input type="file" id="appendFile" accept=".xlsx" hidden></label>
+      <button type="button" class="btn" id="btnCopy">교사별 요청 문구 복사</button>
+      <span id="exportMsg" class="status-inline"></span>
+    </div>
+    <p class="hint small" id="limitNote" hidden></p>
+    <div class="table-scroll">
+      <table class="result" id="resultTable"></table>
+    </div>
+  </section>
+
+  <section class="card privacy" id="privacy">
+    <h2>🔒 개인정보 보호 방식</h2>
+    <ul>
+      <li><b>서버가 없습니다.</b> 이 사이트는 정적 파일(HTML·JS)만 내려받고, 올린 시간표·캡처·결과는 모두 브라우저 메모리 안에서만 처리합니다.</li>
+      <li><b>외부 통신 차단.</b> 보안 정책(CSP)으로 이 사이트 밖의 어떤 주소로도 데이터를 보낼 수 없게 막았습니다. 글자 인식(OCR) 엔진과 한글 인식 자료도 이 사이트 안에 함께 들어 있습니다.</li>
+      <li><b>저장하지 않습니다.</b> 쿠키·로컬 저장소·분석 도구를 쓰지 않습니다. 탭을 닫거나 <button type="button" class="link" id="btnClear">지금 모두 지우기</button>를 누르면 사라집니다.</li>
+      <li>만든 엑셀은 내 컴퓨터로 바로 내려받아지며, 학교 규정에 맞게 보관·파기해 주세요.</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  글자 인식: Tesseract.js (Apache-2.0) · PDF: pdf.js (Apache-2.0) · 엑셀: ExcelJS (MIT), SheetJS CE (Apache-2.0)
+</footer>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="vendor/tesseract/tesseract.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/exceljs.min.js"></script>
+<script src="js/detect.js"></script>
+<script src="js/timetable-pdf.js"></script>
+<script src="js/timetable.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
