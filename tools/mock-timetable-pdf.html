@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- 테스트용 '가상' 나이스 학생별 시간표 (PDF로 인쇄해 tests/fixtures/fake-timetable.pdf 를 만든다). 이름·교사는 모두 지어낸 것. -->
+<html lang="ko"><head><meta charset="utf-8"><title>mock timetable</title>
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  body { margin: 0; font-family: "Noto Sans KR", "WenQuanYi Zen Hei", sans-serif; }
+  .page { width: 210mm; height: 297mm; position: relative; overflow: hidden; page-break-after: always; }
+  /* 나이스 PDF처럼 가로 내용을 90° 돌려 세로 용지에 담는다 */
+  .land { position: absolute; width: 297mm; height: 210mm; left: 0; top: 297mm; transform-origin: 0 0; transform: rotate(-90deg); padding: 14mm; box-sizing: border-box; }
+  h1 { font-size: 15px; margin: 0 0 4px; } h2 { font-size: 12px; margin: 0 0 10px; font-weight: 400; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 10px; }
+  th, td { border: 1px solid #999; height: 17mm; text-align: center; vertical-align: middle; padding: 2px; word-break: keep-all; }
+  th:first-child { width: 14mm; }
+  .sec { color: #555; display: block; margin-bottom: 3px; }
+</style></head><body><div id="root"></div>
+<script>
+  const NAMES = ['강가온','고나래','권다솜','김라온','김마루','남보라','노새봄','류아름','문여울','박은솔',
+    '배하람','서나린','손다온','송미르','신바다','안소리','양하늘','오누리','유가람','윤별하',
+    '이도담','이로운','임새론','장한결','전해솔','정다인','조은별','최푸름'];
+  const ELECT = [['역학과 에너지', '정우진'], ['식품과 영양', '서예린'], ['인공지능 기초', '김도현'], ['세계사', '오하린']];
+  const COMMON = { 1: ['영어Ⅱ', '한서준'], 2: ['문학', '윤지아'], 3: ['기하', '문지후'], 4: ['스포츠 생활2A', '최민재'] };
+  const DAYS = [['월', '09/21'], ['화', '09/22'], ['수', '09/23'], ['목', '09/24'], ['금', '09/25']];
+  let html = '';
+  NAMES.forEach((name, i) => {
+    const no = i + 1;
+    html += `<div class="page"><div class="land"><h1>2026학년도 2학기 2학년 3반</h1><h2>- 4 주차(2026.09.21.) ${no}번 ${name}</h2><table><tr><th>교시</th>`;
+    for (const [d, md] of DAYS) html += `<th>${d}요일(${md})</th>`;
+    html += '</tr>';
+    for (let p = 1; p <= 7; p++) {
+      html += `<tr><th>${p}교시</th>`;
+      for (const [d] of DAYS) {
+        let c = '';
+        if (d === '수') {
+          const s = p <= 4 ? COMMON[p] : ELECT[(no + p) % ELECT.length];
+          const sec = p <= 4 ? '2학년 3반' : `${s[0]}-${'가나다라'[(no + p) % 4]}`;
+          c = `<span class="sec">${sec}</span>${s[0]}(${s[1]})`;
+        }
+        html += `<td>${c}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table></div></div>';
+  });
+  document.getElementById('root').innerHTML = html;
+</script></body></html>

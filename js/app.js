@@ -76,14 +76,14 @@
 
   // ── 1. 시간표 ────────────────────────────────────────
   async function loadTimetable(files) {
-    const f = files[0];
     const box = $('#ttInfo');
     box.hidden = false;
     box.className = 'info';
     box.textContent = '시간표를 읽는 중…';
     try {
-      const tt = await Timetable.readFile(f);
+      const tt = await Timetable.readFiles(files);
       state.tt = tt;
+      if (tt.classCode && !$('#classCode').value.trim()) $('#classCode').value = tt.classCode;
       const n = tt.students.size;
       const slots = new Set();
       for (const s of tt.students.values()) Object.keys(s.slots).forEach(k => slots.add(k));
@@ -94,7 +94,8 @@
       for (const s of tt.students.values()) check(s.slots);
       box.replaceChildren(
         el('div', {}, el('b', { text: '✔ 시간표를 읽었습니다. ' }),
-          `학생 ${n}명 · ${tt.format} · 과목 ${tt.subjects.size}개 · 수업 칸 ${slots.size}개`),
+          `${tt.fileCount > 1 ? `파일 ${tt.fileCount}개 · ` : ''}학생 ${n}명 · ${tt.format} · 과목 ${tt.subjects.size}개 · 수업 칸 ${slots.size}개`),
+        ...(tt.dateRange ? [el('div', { text: `시간표 주간: ${tt.dateRange[0].replace(/-/g, '.')} ~ ${tt.dateRange[1].replace(/-/g, '.')} — 이 기간은 날짜 그대로, 다른 주는 같은 요일 시간표로 찾습니다. (주마다 다르면 해당 주 PDF도 함께 넣어 주세요)` })] : []),
         el('div', { class: 'small', text: '파일 자체는 저장되지 않고, 이 탭의 메모리에만 있습니다.' }),
         ...(noTeacher.length ? [el('div', { class: 'warn', text: `교사 이름이 없는 과목: ${[...new Set(noTeacher)].slice(0, 8).join(', ')} — '과목-교사' 시트로 채울 수 있어요.` })] : []),
         ...tt.warnings.slice(0, 5).map(w => el('div', { class: 'warn', text: w })),

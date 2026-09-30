@@ -24,17 +24,18 @@
   <!-- 1. 시간표 -->
   <section class="card" id="step1">
     <h2><span class="num">1</span> 학생 시간표 불러오기</h2>
-    <p class="hint">학생별 시간표 엑셀(xlsx·xls·csv)을 넣어 주세요. 형식이 없다면 <button type="button" class="link" id="btnTemplate">시간표 양식 내려받기</button>로 만들 수 있습니다.</p>
+    <p class="hint">나이스 <b>학생별 시간표 PDF</b> 또는 시간표 엑셀(xlsx·xls·csv)을 넣어 주세요. 여러 파일(여러 주차)을 한꺼번에 넣어도 됩니다. 형식이 없다면 <button type="button" class="link" id="btnTemplate">시간표 양식 내려받기</button>로 만들 수 있습니다.</p>
     <label class="drop" id="ttDrop">
-      <input type="file" id="ttFile" accept=".xlsx,.xls,.csv" hidden>
+      <input type="file" id="ttFile" accept=".xlsx,.xls,.csv,.pdf" multiple hidden>
       <span class="drop-main">시간표 파일을 끌어다 놓거나 <u>클릭해서 선택</u></span>
-      <span class="drop-sub">가로형(번호·이름·월1…금7) 또는 세로형(번호·이름·요일·교시·과목·교사)</span>
+      <span class="drop-sub">나이스 학생별 시간표 PDF · 엑셀 가로형(번호·이름·월1…금7) · 세로형(번호·이름·요일·교시·과목·교사)</span>
     </label>
     <div id="ttInfo" class="info" hidden></div>
     <details class="fold">
       <summary>시간표 형식 자세히 보기</summary>
       <div class="fold-body">
-        <p><b>가로형 (권장)</b> — 한 학생이 한 줄, 칸에는 <code>과목(교사)</code></p>
+        <p><b>나이스 학생별 시간표 PDF (가장 간편)</b> — 나이스에서 반 학생 전체의 ‘학생별 시간표’를 PDF로 저장해 그대로 넣으면 됩니다. 한 쪽에 학생 한 명, 주차 날짜가 있으면 그 주는 날짜 그대로 찾습니다. (스캔한 이미지 PDF는 읽을 수 없습니다)</p>
+        <p><b>엑셀 가로형</b> — 한 학생이 한 줄, 칸에는 <code>과목(교사)</code></p>
         <div class="table-scroll"><table class="mini">
           <tr><th>번호</th><th>이름</th><th>월1</th><th>월2</th><th>…</th><th>수1</th><th>…</th><th>금7</th></tr>
           <tr><td>1</td><td>강가온</td><td>영어Ⅱ(한서준)</td><td>기하(문지후)</td><td>…</td><td>영어Ⅱ(한서준)</td><td>…</td><td>세계사(오하린)</td></tr>
@@ -122,7 +123,7 @@
 </main>
 
 <footer class="wrap foot">
-  글자 인식: Tesseract.js (Apache-2.0) · 엑셀: ExcelJS (MIT), SheetJS CE (Apache-2.0)
+  글자 인식: Tesseract.js (Apache-2.0) · PDF: pdf.js (Apache-2.0) · 엑셀: ExcelJS (MIT), SheetJS CE (Apache-2.0)
 </footer>
 
 <div id="toast" class="toast" hidden></div>
@@ -131,6 +132,7 @@
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/exceljs.min.js"></script>
 <script src="js/detect.js"></script>
+<script src="js/timetable-pdf.js"></script>
 <script src="js/timetable.js"></script>
 <script src="js/export.js"></script>
 <script src="js/app.js"></script>

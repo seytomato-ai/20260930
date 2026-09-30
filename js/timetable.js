@@ -1,5 +1,5 @@
 /*
- * 학생 시간표 엑셀(xlsx/xls/csv) 읽기.
+ * 학생 시간표 엑셀(xlsx/xls/csv)·나이스 학생별 시간표 PDF 읽기.
  * 파일은 브라우저 메모리에서만 읽고, 어디에도 저장하거나 전송하지 않습니다.
  *
  * 지원 형식
@@ -149,21 +149,78 @@
     return { students, common, subjects, teacherOf, warnings, format };
   }
 
-  async function readFile(file) {
+  async function readPdfFile(file) {
+    const pages = await window.TimetablePdf.readPdf(file, parseCell);
+    if (!pages.length) {
+      throw new Error('PDF에서 시간표 표(1교시…, 월요일…)를 찾지 못했습니다. 나이스 "학생별 시간표" PDF인지, 글자를 선택할 수 있는 PDF인지 확인해 주세요.');
+    }
+    const students = new Map();
+    const subjects = new Set();
+    const warnings = [];
+    const weeks = new Set();
+    let auto = 0;
+    for (const pg of pages) {
+      let no = pg.head.no;
+      if (!no) { no = ++auto; warnings.push(`${no}쪽: 학생 번호를 찾지 못해 순서대로 ${no}번으로 두었습니다.`); } else auto = no;
+      const st = { no, name: pg.head.name || `${no}번`, slots: pg.slots, dated: pg.dated };
+      students.set(no, st);
+      for (const k in pg.slots) subjects.add(pg.slots[k].subject);
+      Object.keys(pg.dated).forEach(k => weeks.add(k.slice(0, 10)));
+    }
+    const meta = pages.find(p => p.head.grade);
+    return {
+      students, common: {}, subjects, teacherOf: {}, warnings, format: 'PDF(학생별 시간표)',
+      classCode: meta ? `${meta.head.grade}-${meta.head.cls}` : '',
+      dateRange: weeks.size ? [[...weeks].sort()[0], [...weeks].sort().pop()] : null,
+    };
+  }
+
+  async function readOne(file) {
+    if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') return readPdfFile(file);
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array', cellDates: false, codepage: 949 });
     return parseWorkbook(wb);
   }
 
-  /** 날짜(YYYY-MM-DD)와 교시로 학생의 과목·교사를 찾는다. */
+  /** 여러 파일(예: 여러 주차 PDF)을 읽어 하나로 합친다. 요일 기본값은 나중 파일이 우선, 날짜별 칸은 모두 보존. */
+  async function readFiles(files) {
+    let tt = null;
+    for (const f of files) {
+      const t = await readOne(f);
+      if (!tt) { tt = t; continue; }
+      for (const [no, st] of t.students) {
+        const cur = tt.students.get(no);
+        if (!cur) { tt.students.set(no, st); continue; }
+        Object.assign(cur.slots, st.slots);
+        cur.dated = Object.assign(cur.dated || {}, st.dated || {});
+      }
+      Object.assign(tt.common, t.common);
+      t.subjects.forEach(s => tt.subjects.add(s));
+      tt.warnings.push(...t.warnings);
+      if (t.format !== tt.format) tt.format += ' + ' + t.format;
+      tt.classCode = tt.classCode || t.classCode;
+      if (t.dateRange) {
+        tt.dateRange = tt.dateRange
+          ? [[tt.dateRange[0], t.dateRange[0]].sort()[0], [tt.dateRange[1], t.dateRange[1]].sort()[1]]
+          : t.dateRange;
+      }
+    }
+    tt.fileCount = files.length;
+    return tt;
+  }
+
+  const readFile = file => readFiles([file]);
+
+  /** 날짜(YYYY-MM-DD)와 교시로 학생의 과목·교사를 찾는다. 그 날짜의 시간표(PDF 주차)가 있으면 우선 사용. */
   function lookup(tt, no, dateStr, period) {
     if (!tt) return null;
+    const st = tt.students.get(no);
+    if (st && st.dated && st.dated[dateStr + '|' + period]) return st.dated[dateStr + '|' + period];
     const d = new Date(dateStr + 'T00:00:00');
     const day = '일월화수목금토'[d.getDay()];
     const key = day + period;
-    const st = tt.students.get(no);
     return (st && st.slots[key]) || tt.common[key] || null;
   }
 
-  window.Timetable = { readFile, parseWorkbook, lookup, parseCell, dayPeriodFromHeader, DAYS };
+  window.Timetable = { readFile, readFiles, parseWorkbook, lookup, parseCell, dayPeriodFromHeader, DAYS };
 })();

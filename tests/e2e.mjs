@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fx = f => path.join(root, 'tests/fixtures', f);
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.gz': 'application/gzip' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.gz': 'application/gzip' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (p.endsWith('/')) p += 'index.html';
@@ -104,6 +104,27 @@ ok(external.length === 0, '외부 주소로 나간 요청 없음' + (external.le
 const storage = await page.evaluate(async () => ({ ls: localStorage.length, ss: sessionStorage.length, cookie: document.cookie, idb: indexedDB.databases ? (await indexedDB.databases()).length : 0 }));
 ok(storage.ls === 0 && storage.ss === 0 && !storage.cookie && storage.idb === 0, '쿠키·로컬저장소·IndexedDB 사용 없음');
 ok(errors.length === 0, '콘솔 오류 없음' + (errors.length ? ': ' + errors.join(' / ') : ''));
+
+// PDF 시간표 (나이스 학생별 시간표처럼 90° 회전된 표) → 엑셀 시간표와 같은 결과
+{
+  const p2 = await ctx.newPage();
+  p2.on('request', r => { if (!r.url().startsWith(base) && !/^(blob|data):/.test(r.url())) external.push(r.url()); });
+  p2.on('pageerror', e => errors.push(e.message));
+  await p2.goto(base);
+  await p2.setInputFiles('#ttFile', fx('fake-timetable.pdf'));
+  await p2.waitForFunction(() => !document.querySelector('#ttInfo').hidden && !/읽는 중/.test(document.querySelector('#ttInfo').textContent), null, { timeout: 60000 });
+  const info = await p2.textContent('#ttInfo');
+  ok(info.includes('학생 28명') && info.includes('PDF'), 'PDF 시간표: 학생 28명 인식');
+  ok(await p2.inputValue('#classCode') === '2-3', 'PDF에서 학년-반 채우기');
+  await p2.setInputFiles('#imgFile', [fx('mock-part1.png'), fx('mock-part2.png')]);
+  await p2.waitForFunction(() => window.__app.state.shots.length === 2 && window.__app.state.shots.every(s => s.status === 'done' || s.status === 'error'), null, { timeout: 120000 });
+  const pdfRows = await p2.evaluate(() => window.__app.getRows());
+  const key = r => `${r.no}|${r.name}|${r.periodText}|${r.subject}|${r.teacher}`;
+  ok(JSON.stringify(pdfRows.map(key)) === JSON.stringify(rows.map(key)), `PDF 시간표로도 같은 결과 (${pdfRows.length}행)`);
+  if (JSON.stringify(pdfRows.map(key)) !== JSON.stringify(rows.map(key))) console.log('    pdf', pdfRows.map(key).join(' '), '\n    xlsx', rows.map(key).join(' '));
+  await p2.close();
+  ok(errors.length === 0 && external.length === 0, 'PDF 처리 중에도 오류·외부 통신 없음' + (errors.length ? ': ' + errors.join(' / ') : ''));
+}
 
 await page.setViewportSize({ width: 390, height: 900 });
 ok(await page.evaluate(() => document.documentElement.scrollWidth <= 390), '휴대폰 폭에서 가로 스크롤 없음');
