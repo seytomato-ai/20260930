@@ -155,5 +155,13 @@
     return pages;
   }
 
-  window.TimetablePdf = { readPdf, parsePage, toItems };
+  async function readItems(file) {
+    const {lib, base} = await loadPdfjs();
+    const doc = await lib.getDocument({data: new Uint8Array(await file.arrayBuffer()), cMapUrl: base+'cmaps/', cMapPacked:true, isEvalSupported:false}).promise;
+    const pages=[];
+    try { for(let i=1;i<=doc.numPages;i++) { const pg=await doc.getPage(i); pages.push(toItems(await pg.getTextContent())); pg.cleanup(); } }
+    finally { await doc.destroy(); }
+    return pages;
+  }
+  window.TimetablePdf = { readPdf, readItems, parsePage, toItems };
 })();

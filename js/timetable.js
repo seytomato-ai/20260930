@@ -163,14 +163,21 @@
       let no = pg.head.no;
       if (!no) { no = ++auto; warnings.push(`${no}쪽: 학생 번호를 찾지 못해 순서대로 ${no}번으로 두었습니다.`); } else auto = no;
       const st = { no, name: pg.head.name || `${no}번`, slots: pg.slots, dated: pg.dated };
-      students.set(no, st);
+      const previous = students.get(no);
+      if (previous) {
+        if (previous.name !== st.name) throw new Error(`${no}번 학생 이름이 다릅니다. 같은 학급의 시간표만 넣어 주세요.`);
+        Object.assign(previous.slots, st.slots);
+        Object.assign(previous.dated, st.dated);
+      } else students.set(no, st);
       for (const k in pg.slots) subjects.add(pg.slots[k].subject);
       Object.keys(pg.dated).forEach(k => weeks.add(k.slice(0, 10)));
     }
     const meta = pages.find(p => p.head.grade);
+    if (!weeks.size) throw new Error('PDF에서 주차 날짜를 찾지 못했습니다. 주차 날짜가 표시된 학생별 시간표를 사용해 주세요.');
     return {
       students, common: {}, subjects, teacherOf: {}, warnings, format: 'PDF(학생별 시간표)',
       classCode: meta ? `${meta.head.grade}-${meta.head.cls}` : '',
+      datedOnly: true,
       dateRange: weeks.size ? [[...weeks].sort()[0], [...weeks].sort().pop()] : null,
     };
   }
@@ -183,14 +190,33 @@
   }
 
   /** 여러 파일(예: 여러 주차 PDF)을 읽어 하나로 합친다. 요일 기본값은 나중 파일이 우선, 날짜별 칸은 모두 보존. */
-  async function readFiles(files) {
+  async function readFiles(files, weekStarts = []) {
     let tt = null;
-    for (const f of files) {
+    for (const [index, f] of files.entries()) {
       const t = await readOne(f);
+      if (!t.datedOnly) {
+        const start = weekStarts[index];
+        if (!start) throw new Error(`${f.name}: 엑셀 시간표의 주 시작일(월요일)을 지정해 주세요.`);
+        const monday = new Date(start + 'T00:00:00');
+        if (monday.getDay() !== 1) throw new Error('주 시작일은 월요일을 선택해 주세요.');
+        for (const st of t.students.values()) {
+          st.dated = {};
+          for (const [key, value] of Object.entries({...t.common, ...st.slots})) {
+            const offset = DAYS.indexOf(key[0]);
+            const day = new Date(monday); day.setDate(day.getDate() + offset);
+            const ds = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`;
+            st.dated[ds + '|' + key.slice(1)] = value;
+          }
+        }
+        const end = new Date(monday); end.setDate(end.getDate()+6);
+        t.dateRange = [start, `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`];
+        t.datedOnly = true;
+      }
       if (!tt) { tt = t; continue; }
       for (const [no, st] of t.students) {
         const cur = tt.students.get(no);
         if (!cur) { tt.students.set(no, st); continue; }
+        if (cur.name !== st.name) throw new Error(`${no}번 학생 이름이 다릅니다. 같은 학급의 파일만 넣어 주세요.`);
         Object.assign(cur.slots, st.slots);
         cur.dated = Object.assign(cur.dated || {}, st.dated || {});
       }
@@ -215,7 +241,14 @@
   function lookup(tt, no, dateStr, period) {
     if (!tt) return null;
     const st = tt.students.get(no);
+    if (new Date(dateStr + 'T00:00:00').getDay() === 5 && [5,6,7].includes(+period)) {
+      const club = tt.clubs && tt.clubs.get(no);
+      if (!club || !st || club.name !== st.name) return null;
+      if (!st.dated || !Object.keys(st.dated).some(k => k.startsWith(dateStr + '|'))) return null;
+      return { subject: `동아리(${club.subject})`, teacher: club.teacher };
+    }
     if (st && st.dated && st.dated[dateStr + '|' + period]) return st.dated[dateStr + '|' + period];
+    if (tt.datedOnly) return null;
     const d = new Date(dateStr + 'T00:00:00');
     const day = '일월화수목금토'[d.getDay()];
     const key = day + period;

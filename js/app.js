@@ -16,7 +16,9 @@
 
   // ── 상태 (메모리에만 존재) ─────────────────────────────
   const state = {
-    tt: null,          // 시간표
+    tt: null,
+    clubs: null,
+    timetableFiles: [],          // 시간표
     shots: [],         // 캡처 이미지와 인식 결과
     overrides: new Map(), // `${date}|${no}|${col}` → true/false (사용자가 직접 바꾼 칸)
   };
@@ -75,13 +77,38 @@
   }
 
   // ── 1. 시간표 ────────────────────────────────────────
-  async function loadTimetable(files) {
+  async function addTimetables(files) {
+    const accepted = files.filter(f=>/\.(pdf|xlsx|xls|csv)$/i.test(f.name));
+    for(const file of accepted) if(!state.timetableFiles.some(x=>x.file.name===file.name && x.file.size===file.size && x.file.lastModified===file.lastModified)) state.timetableFiles.push({file,start:''});
+    renderWeekFiles(); await loadTimetable();
+  }
+  function renderWeekFiles() {
+    const host=$('#weekFiles'); host.hidden=!state.timetableFiles.length; host.replaceChildren();
+    for(const entry of state.timetableFiles) {
+      const row=el('div',{class:'row gap'},el('span',{text:entry.file.name}));
+      if(!/\.pdf$/i.test(entry.file.name)) {
+        const input=el('input',{type:'date',value:entry.start,'aria-label':entry.file.name+' 주 시작일'});
+        input.addEventListener('change',()=>{entry.start=input.value;loadTimetable();});
+        row.append(el('label',{},'주 시작일(월요일) ',input));
+      }
+      row.append(el('button',{type:'button',class:'btn small',text:'빼기',onclick:()=>{state.timetableFiles=state.timetableFiles.filter(x=>x!==entry);renderWeekFiles();loadTimetable();}}));host.append(row);
+    }
+  }
+  let loadSeq=0;
+  async function loadTimetable() {
+    const seq=++loadSeq, files=state.timetableFiles.map(x=>x.file);
+    if(!files.length) {state.tt=null;$('#ttInfo').hidden=true;render();return;}
+    if(state.timetableFiles.some(x=>!/\.pdf$/i.test(x.file.name) && !x.start)) {
+      state.tt=null;$('#ttInfo').hidden=false;$('#ttInfo').className='info';$('#ttInfo').textContent='각 엑셀 파일의 주 시작일(월요일)을 지정해 주세요.';render();return;
+    }
     const box = $('#ttInfo');
     box.hidden = false;
     box.className = 'info';
     box.textContent = '시간표를 읽는 중…';
     try {
-      const tt = await Timetable.readFiles(files);
+      const tt = await Timetable.readFiles(files, state.timetableFiles.map(x=>x.start));
+      if(seq!==loadSeq) return;
+      tt.clubs=state.clubs;
       state.tt = tt;
       if (tt.classCode && !$('#classCode').value.trim()) $('#classCode').value = tt.classCode;
       const n = tt.students.size;
@@ -95,14 +122,16 @@
       box.replaceChildren(
         el('div', {}, el('b', { text: '✔ 시간표를 읽었습니다. ' }),
           `${tt.fileCount > 1 ? `파일 ${tt.fileCount}개 · ` : ''}학생 ${n}명 · ${tt.format} · 과목 ${tt.subjects.size}개 · 수업 칸 ${slots.size}개`),
-        ...(tt.dateRange ? [el('div', { text: `시간표 주간: ${tt.dateRange[0].replace(/-/g, '.')} ~ ${tt.dateRange[1].replace(/-/g, '.')} — 이 기간은 날짜 그대로, 다른 주는 같은 요일 시간표로 찾습니다. (주마다 다르면 해당 주 PDF도 함께 넣어 주세요)` })] : []),
+        ...(tt.dateRange ? [el('div', { text: `시간표 주간: ${tt.dateRange[0].replace(/-/g, '.')} ~ ${tt.dateRange[1].replace(/-/g, '.')} — 등록된 날짜만 조회합니다. 빠진 주차는 해당 주 파일을 추가해 주세요.` })] : []),
         el('div', { class: 'small', text: '파일 자체는 저장되지 않고, 이 탭의 메모리에만 있습니다.' }),
         ...(noTeacher.length ? [el('div', { class: 'warn', text: `교사 이름이 없는 과목: ${[...new Set(noTeacher)].slice(0, 8).join(', ')} — '과목-교사' 시트로 채울 수 있어요.` })] : []),
         ...tt.warnings.slice(0, 5).map(w => el('div', { class: 'warn', text: w })),
       );
       render();
     } catch (e) {
+      if(seq!==loadSeq) return;
       state.tt = null;
+      render();
       box.className = 'info error';
       box.textContent = '시간표를 읽지 못했습니다: ' + (e.message || e);
     }
@@ -420,38 +449,20 @@
             classCode, no, name: studentName(no, d.names) || `${no}번`,
             date, dateText: date.replace(/-/g, '.'), periodText: col, period: period || COL_ORDER(col),
             subject: hit ? hit.subject : (period ? '' : col), teacher: hit ? hit.teacher : '',
-            status, message: msg, missing: !!period && !hit,
+            status, message: msg, missing: !!period && (!hit || !hit.teacher),
           });
         }
       }
     }
-    const out = $('#optMerge').checked ? mergeRows(rows) : rows;
-    return $('#optLimit').checked ? limitRows(out, Math.max(1, parseInt($('#optLimitN').value, 10) || 3)) : out;
-  }
-
-  // 같은 날짜·과목·교시·담당 교사의 학생이 많으면 번호순으로 앞의 n명만 남긴다.
-  // 남긴 행에는 원래 전체 학생 수(groupTotal)를 적어 두어 요약·요청 문구에 '외 N명'으로 쓴다.
-  function limitRows(rows, n) {
-    const groups = new Map();
-    for (const r of rows) {
-      if (!r.subject) continue; // 과목을 모르면 묶지 않는다
-      const k = [r.date, r.subject, r.periodText, r.teacher].join('|');
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k).push(r);
-    }
-    const drop = new Set();
-    for (const g of groups.values()) {
-      if (g.length <= n) continue;
-      g.forEach((r, i) => { r.groupTotal = g.length; if (i >= n) drop.add(r); });
-    }
-    return rows.filter(r => !drop.has(r));
+    const unique = RequestRows.unique(rows);
+    return $('#optMerge').checked ? mergeRows(unique) : unique;
   }
 
   function mergeRows(rows) {
     const out = [];
     for (const r of rows) {
       const prev = out[out.length - 1];
-      if (prev && prev.no === r.no && prev.date === r.date && prev.subject && prev.subject === r.subject && prev.teacher === r.teacher) {
+      if (prev && prev.name === r.name && prev.date === r.date && prev.subject && prev.subject === r.subject && prev.teacher === r.teacher) {
         prev.periodText += ', ' + r.periodText;
       } else out.push({ ...r });
     }
@@ -483,19 +494,9 @@
     }
     lastRows = buildRows(byDate);
     renderResult(lastRows);
-    const seen = new Set();
-    let hidden = 0, groups = 0;
-    for (const r of lastRows) {
-      if (!r.groupTotal) continue;
-      const k = [r.date, r.subject, r.periodText, r.teacher].join('|');
-      if (seen.has(k)) continue;
-      seen.add(k);
-      groups++;
-      hidden += r.groupTotal - lastRows.filter(x => x.groupTotal && [x.date, x.subject, x.periodText, x.teacher].join('|') === k).length;
-    }
-    const note = $('#limitNote');
-    note.hidden = !hidden;
-    note.textContent = hidden ? `같은 수업 학생이 많은 ${groups}건은 번호 순으로 앞의 학생만 적고 ${hidden}명은 생략했습니다. (교사별 요약·요청 문구에는 '외 N명'으로 표시)` : '';
+    const missing=lastRows.filter(r=>r.missing).length;
+    const note=$('#limitNote');note.hidden=!missing;
+    note.textContent=missing ? `교사 또는 시간표 미확인 ${missing}행: 해당 주 시간표와 동아리 명단을 확인해 주세요.` : '';
   }
 
   function fileName() {
@@ -526,7 +527,7 @@
     if (!ensureReady()) return;
     try {
       const res = await Exporter.appendToExisting(files[0], lastRows, { filename: files[0].name });
-      $('#exportMsg').textContent = `✔ '${res.sheet}' 시트에 ${res.added}줄 추가${res.skipped ? `, 이미 있던 ${res.skipped}줄은 건너뜀` : ''}. 내려받은 파일로 기존 파일을 바꿔 주세요.`;
+      $('#exportMsg').textContent = `✔ '${res.sheet}' 시트에 ${res.added}줄 추가${res.skipped ? `, 같은 날짜·교시·교사 ${res.skipped}건은 기존 행에 통합` : ''}. 내려받은 파일로 기존 파일을 바꿔 주세요.`;
     } catch (e) {
       $('#exportMsg').textContent = '';
       toast('이어쓰기 실패: ' + (e.message || e));
@@ -564,7 +565,9 @@
 
   async function clearAll() {
     for (const s of state.shots) if (s.url) URL.revokeObjectURL(s.url);
-    state.tt = null;
+    ++loadSeq;
+    state.tt = null; state.clubs=null; state.timetableFiles=[];
+    renderWeekFiles(); $('#clubInfo').hidden=true;
     state.shots = [];
     state.overrides.clear();
     lastRows = [];
@@ -578,16 +581,25 @@
   }
 
   // ── 연결 ────────────────────────────────────────────
-  wireDrop($('#ttDrop'), $('#ttFile'), loadTimetable);
+  wireDrop($('#ttDrop'), $('#ttFile'), addTimetables);
+  wireDrop($('#clubDrop'), $('#clubFile'), async files=>{
+    const box=$('#clubInfo');box.hidden=false;box.className='info';box.textContent='동아리 명단을 읽는 중…';
+    try {
+      const clubs=await Clubs.readFile(files[0]);state.clubs=clubs;
+      if(state.tt) state.tt.clubs=clubs;
+      box.textContent=`✔ ${files[0].name}: 학생 ${clubs.size}명 · 복수 담당교사는 한 행에 표시합니다.`;
+    } catch(e) {state.clubs=null;if(state.tt) state.tt.clubs=null;box.className='info error';box.textContent=e.message;}
+    render();
+  });
   wireDrop($('#imgDrop'), $('#imgFile'), addImages);
   $('#btnTemplate').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); downloadTemplate(); });
   $('#btnNew').addEventListener('click', exportNew);
   $('#appendFile').addEventListener('change', e => { const f = [...e.target.files]; e.target.value = ''; if (f.length) exportAppend(f); });
   $('#btnCopy').addEventListener('click', copyMessages);
   $('#btnClear').addEventListener('click', clearAll);
-  for (const id of ['#classCode', '#optMsg', '#optStatus', '#optMerge', '#optLimitN']) $(id).addEventListener('input', render);
+  for (const id of ['#classCode', '#optMsg', '#optStatus', '#optMerge']) $(id).addEventListener('input', render);
   $('#optMerge').addEventListener('change', render);
-  $('#optLimit').addEventListener('change', render);
+
 
   document.addEventListener('paste', e => {
     const files = [...(e.clipboardData ? e.clipboardData.items : [])]
